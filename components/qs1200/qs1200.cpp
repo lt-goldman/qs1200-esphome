@@ -89,7 +89,7 @@ void IRAM_ATTR QS1200Component::isr_from_main(QS1200Component *arg) {
 void IRAM_ATTR QS1200Component::isr_from_disp(QS1200Component *arg) {
   if (arg->injecting_)
     return;
-  arg->to_main_pin_->digital_write(!arg->from_disp_pin_->digital_read());
+  arg->to_main_pin_->digital_write(arg->from_disp_pin_->digital_read());
 }
 
 void QS1200Component::process_frame_(uint32_t frame) {
