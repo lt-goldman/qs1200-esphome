@@ -1,0 +1,162 @@
+################################################################################
+# Intex QS1200 / ECO6220G / CG-26670  —  ESPHome configuratie
+#
+# Architectuur: ESP32 als man-in-the-middle tussen mainboard en displayboard.
+#
+#   Intex mainboard  <──DIO──>  ESP32  <──DIO──>  display/keypad board
+#                    <──CLK──>         <──CLK──>
+#
+# Level shifting VEREIST als de Intex-signalen 5V zijn (meet na!).
+# Gebruik een bidirectionele level shifter (bijv. TXS0108E) of voltage divider
+# op de ingangen, en een open-drain buffer op de uitgangen.
+#
+# GND-verbinding: gebruik DC logic GND van het Intex-bord, niet AC-zijde.
+# Voed de ESP32 bij voorkeur via eigen buck converter op de 12V-rail van Intex.
+################################################################################
+
+esphome:
+  name: qs1200
+  friendly_name: "Intex QS1200 SWG"
+  # Zorg dat het external_components pad klopt t.o.v. je ESPHome config-dir.
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logger:
+  level: DEBUG
+  # Verhoog naar VERBOSE om elke frame in de logs te zien.
+
+# ── Wi-Fi ─────────────────────────────────────────────────────────────────────
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "QS1200 Fallback"
+    password: !secret fallback_password
+
+captive_portal:
+
+# ── Home Assistant API ────────────────────────────────────────────────────────
+api:
+  encryption:
+    key: !secret ha_api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# ── External component ────────────────────────────────────────────────────────
+external_components:
+  - source:
+      type: local
+      path: components
+
+# ── QS1200 component (pinnen aanpassen aan jouw bedrading) ───────────────────
+#
+#  GPIO18  ← DIO van mainboard  (FROM_MAIN)   → intern decoden + doorsturen
+#  GPIO16  → DIO naar displayboard (TO_DISP)  ← pass-through / inject
+#  GPIO17  ← CLK van displayboard (FROM_DISP) ← knoppen lezen
+#  GPIO19  → CLK naar mainboard (TO_MAIN)     → pass-through / knoppen injecteren
+#
+qs1200:
+  id: swg
+  from_main_pin:
+    number: GPIO18
+    mode: INPUT
+  to_disp_pin:
+    number: GPIO16
+    mode: OUTPUT
+  from_disp_pin:
+    number: GPIO17
+    mode: INPUT
+  to_main_pin:
+    number: GPIO19
+    mode: OUTPUT
+
+# ── Fase 1: displaycode uitlezen ──────────────────────────────────────────────
+text_sensor:
+  - platform: qs1200
+    qs1200_id: swg
+    display_code:
+      id: qs1200_display_code
+      name: "QS1200 Displaycode"
+      icon: mdi:numeric
+
+# ── Fase 1: statussensoren ────────────────────────────────────────────────────
+binary_sensor:
+  - platform: qs1200
+    qs1200_id: swg
+    running:
+      id: qs1200_running
+      name: "QS1200 Actief"
+    boost:
+      id: qs1200_boost
+      name: "QS1200 Boost"
+    sleep:
+      id: qs1200_sleep
+      name: "QS1200 Slaapstand"
+    low_flow:
+      id: qs1200_low_flow
+      name: "QS1200 Lage doorstroming"
+    low_salt:
+      id: qs1200_low_salt
+      name: "QS1200 Zout te laag"
+    high_salt:
+      id: qs1200_high_salt
+      name: "QS1200 Zout te hoog"
+    service:
+      id: qs1200_service
+      name: "QS1200 Servicefout"
+
+# ── Fase 2: knoppen (commentaar verwijderen als bedrading klaar is) ───────────
+#
+# button:
+#   - platform: qs1200
+#     qs1200_id: swg
+#     power:
+#       id: qs1200_btn_power
+#       name: "QS1200 Aan/Uit"
+#       icon: mdi:power
+#     timer:
+#       id: qs1200_btn_timer
+#       name: "QS1200 Timer"
+#       icon: mdi:timer
+#     boost:
+#       id: qs1200_btn_boost
+#       name: "QS1200 Boost"
+#       icon: mdi:rocket-launch
+#     self_clean:
+#       id: qs1200_btn_self_clean
+#       name: "QS1200 Zelfreinigen"
+#       icon: mdi:autorenew
+#     lock:
+#       id: qs1200_btn_lock
+#       name: "QS1200 Vergrendeling"
+#       icon: mdi:lock
+
+# ── Fase 3: runtime abstractie (voorbeeldscript) ──────────────────────────────
+#
+# number:
+#   - platform: template
+#     id: qs1200_runtime_hours
+#     name: "QS1200 Looptijd (uur)"
+#     min_value: 1
+#     max_value: 12
+#     step: 1
+#     optimistic: true
+#     initial_value: 8
+#     unit_of_measurement: "h"
+#
+# select:
+#   - platform: template
+#     id: qs1200_self_clean_interval
+#     name: "QS1200 Zelfreinigingsinterval"
+#     options:
+#       - "6h"
+#       - "10h"
+#       - "14h"
+#     optimistic: true
+#     initial_option: "10h"
