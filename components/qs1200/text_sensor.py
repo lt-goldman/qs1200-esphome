@@ -1,7 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import text_sensor
-from esphome.const import CONF_ID
 from . import QS1200Component, CONF_QS1200_ID
 
 DEPENDENCIES = ["qs1200"]
