@@ -2,7 +2,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import button
-from esphome.const import CONF_ID
 from . import qs1200_ns, QS1200Component, CONF_QS1200_ID
 
 DEPENDENCIES = ["qs1200"]
@@ -13,12 +12,20 @@ CONF_BOOST      = "boost"
 CONF_SELF_CLEAN = "self_clean"
 CONF_LOCK       = "lock"
 
-# One Button subclass per physical key so each maps to its own press_*() call.
+# C++ klassen zijn gedefinieerd in qs1200.h (zelfde namespace), dus automatisch included.
 QS1200PowerButton     = qs1200_ns.class_("QS1200PowerButton",     button.Button)
 QS1200TimerButton     = qs1200_ns.class_("QS1200TimerButton",     button.Button)
 QS1200BoostButton     = qs1200_ns.class_("QS1200BoostButton",     button.Button)
 QS1200SelfCleanButton = qs1200_ns.class_("QS1200SelfCleanButton", button.Button)
 QS1200LockButton      = qs1200_ns.class_("QS1200LockButton",      button.Button)
+
+_BUTTONS = [
+    (CONF_POWER,      QS1200PowerButton,     "set_running_sensor"),   # placeholder — set_parent used below
+    (CONF_TIMER,      QS1200TimerButton,     None),
+    (CONF_BOOST,      QS1200BoostButton,     None),
+    (CONF_SELF_CLEAN, QS1200SelfCleanButton, None),
+    (CONF_LOCK,       QS1200LockButton,      None),
+]
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -31,19 +38,13 @@ CONFIG_SCHEMA = cv.Schema(
     }
 )
 
-_BUTTON_MAP = [
-    (CONF_POWER,      QS1200PowerButton,     "set_parent"),
-    (CONF_TIMER,      QS1200TimerButton,     "set_parent"),
-    (CONF_BOOST,      QS1200BoostButton,     "set_parent"),
-    (CONF_SELF_CLEAN, QS1200SelfCleanButton, "set_parent"),
-    (CONF_LOCK,       QS1200LockButton,      "set_parent"),
-]
-
 
 async def to_code(config):
     hub = await cg.get_variable(config[CONF_QS1200_ID])
 
-    for key, cls, _ in _BUTTON_MAP:
-        if key in config:
-            btn = await button.new_button(config[key])
-            cg.add(btn.set_parent(hub))
+    for key, cls, _ in _BUTTONS:
+        if key not in config:
+            continue
+        btn = cg.new_Pvariable(config[key][cg.CONF_ID], cls)
+        await button.register_button(btn, config[key])
+        cg.add(btn.set_parent(hub))

@@ -1,7 +1,7 @@
 #include "qs1200.h"
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
-#include <Arduino.h>  // delayMicroseconds, micros
+// delayMicroseconds() en delay() komen via esphome/core/hal.h (al included via qs1200.h)
 
 namespace esphome {
 namespace qs1200 {

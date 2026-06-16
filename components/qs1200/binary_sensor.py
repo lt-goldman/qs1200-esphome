@@ -1,11 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import binary_sensor
-from esphome.const import (
-    CONF_ID,
-    DEVICE_CLASS_RUNNING,
-    DEVICE_CLASS_PROBLEM,
-)
 from . import QS1200Component, CONF_QS1200_ID
 
 DEPENDENCIES = ["qs1200"]
@@ -21,13 +16,13 @@ CONF_SERVICE    = "service"
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(CONF_QS1200_ID): cv.use_id(QS1200Component),
-        cv.Optional(CONF_RUNNING):   binary_sensor.binary_sensor_schema(device_class=DEVICE_CLASS_RUNNING),
+        cv.Optional(CONF_RUNNING):   binary_sensor.binary_sensor_schema(device_class="running"),
         cv.Optional(CONF_BOOST):     binary_sensor.binary_sensor_schema(),
         cv.Optional(CONF_SLEEP):     binary_sensor.binary_sensor_schema(),
-        cv.Optional(CONF_LOW_FLOW):  binary_sensor.binary_sensor_schema(device_class=DEVICE_CLASS_PROBLEM),
-        cv.Optional(CONF_LOW_SALT):  binary_sensor.binary_sensor_schema(device_class=DEVICE_CLASS_PROBLEM),
-        cv.Optional(CONF_HIGH_SALT): binary_sensor.binary_sensor_schema(device_class=DEVICE_CLASS_PROBLEM),
-        cv.Optional(CONF_SERVICE):   binary_sensor.binary_sensor_schema(device_class=DEVICE_CLASS_PROBLEM),
+        cv.Optional(CONF_LOW_FLOW):  binary_sensor.binary_sensor_schema(device_class="problem"),
+        cv.Optional(CONF_LOW_SALT):  binary_sensor.binary_sensor_schema(device_class="problem"),
+        cv.Optional(CONF_HIGH_SALT): binary_sensor.binary_sensor_schema(device_class="problem"),
+        cv.Optional(CONF_SERVICE):   binary_sensor.binary_sensor_schema(device_class="problem"),
     }
 )
 

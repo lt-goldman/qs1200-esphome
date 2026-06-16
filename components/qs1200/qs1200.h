@@ -5,7 +5,11 @@
 #include "esphome/core/log.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
+#ifdef USE_BUTTON
+#include "esphome/components/button/button.h"
+#endif
 
+// FreeRTOS spinlock for ISR ↔ loop synchronisation (ESP32 only).
 #include <freertos/FreeRTOS.h>
 #include <freertos/portmacro.h>
 
@@ -33,10 +37,13 @@ static const uint8_t BUTTON_BOOST      = 0x10;
 
 // Pulse timing (µs).  Frame: LOW-200 start, then per bit: HIGH-(800|200) + LOW-200 spacer.
 // Delta between consecutive falling edges: (HIGH + 200) µs.
-static const uint32_t BIT1_MIN = 700;
-static const uint32_t BIT1_MAX = 1300;
+// Bit-1 total: 800+200=1000 µs  →  window [750, 1350)
+// Bit-0 total: 200+200= 400 µs  →  window [100,  650)
+// Gap between windows avoids any overlap.
+static const uint32_t BIT1_MIN = 750;
+static const uint32_t BIT1_MAX = 1350;
 static const uint32_t BIT0_MIN = 100;
-static const uint32_t BIT0_MAX = 700;
+static const uint32_t BIT0_MAX = 650;
 
 // Debounce delay after a button press before sending RELEASE (ms).
 static const uint32_t BUTTON_DEBOUNCE_MS = 50;
@@ -127,6 +134,52 @@ class QS1200Component : public Component {
   static char seg_to_char_(uint8_t seg);
   void send_button_(uint8_t button_code);
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fase 2 — button subklassen (alleen gecompileerd als USE_BUTTON actief is)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#ifdef USE_BUTTON
+class QS1200PowerButton : public button::Button {
+ public:
+  void set_parent(QS1200Component *p) { parent_ = p; }
+ protected:
+  void press_action() override { parent_->press_power(); }
+  QS1200Component *parent_{nullptr};
+};
+
+class QS1200TimerButton : public button::Button {
+ public:
+  void set_parent(QS1200Component *p) { parent_ = p; }
+ protected:
+  void press_action() override { parent_->press_timer(); }
+  QS1200Component *parent_{nullptr};
+};
+
+class QS1200BoostButton : public button::Button {
+ public:
+  void set_parent(QS1200Component *p) { parent_ = p; }
+ protected:
+  void press_action() override { parent_->press_boost(); }
+  QS1200Component *parent_{nullptr};
+};
+
+class QS1200SelfCleanButton : public button::Button {
+ public:
+  void set_parent(QS1200Component *p) { parent_ = p; }
+ protected:
+  void press_action() override { parent_->press_self_clean(); }
+  QS1200Component *parent_{nullptr};
+};
+
+class QS1200LockButton : public button::Button {
+ public:
+  void set_parent(QS1200Component *p) { parent_ = p; }
+ protected:
+  void press_action() override { parent_->press_lock(); }
+  QS1200Component *parent_{nullptr};
+};
+#endif  // USE_BUTTON
 
 }  // namespace qs1200
 }  // namespace esphome
