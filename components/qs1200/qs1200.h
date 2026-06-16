@@ -1,10 +1,9 @@
 #pragma once
 
-// ESP32-specific headers — must come before ESPHome includes so that
-// FreeRTOS types (portMUX_TYPE, IRAM_ATTR, etc.) are visible everywhere.
-#include <freertos/FreeRTOS.h>
-#include <freertos/portmacro.h>
-#include <esp_attr.h>   // IRAM_ATTR
+// ESP32 headers must come before ESPHome includes so FreeRTOS types are visible.
+#include "freertos/FreeRTOS.h"
+#include "freertos/portmacro.h"
+#include "esp_attr.h"
 
 #include "esphome/core/component.h"
 #include "esphome/core/hal.h"
@@ -18,7 +17,7 @@
 namespace esphome {
 namespace qs1200 {
 
-// ── LED bit masks (lower 16 bits of the decoded 32-bit frame) ────────────────
+// LED bit masks (lower 16 bits of the decoded 32-bit frame).
 // Source: jingsno/intex-swg-pcb protocol documentation.
 static const uint32_t LED_SERVICE       = (1UL <<  0);  // 0x0001
 static const uint32_t LED_HIGH_SALT     = (1UL <<  1);  // 0x0002
@@ -29,7 +28,7 @@ static const uint32_t LED_WORKING       = (1UL << 11);  // 0x0800
 static const uint32_t LED_SLEEP         = (1UL << 12);  // 0x1000
 static const uint32_t LED_BOOST         = (1UL << 15);  // 0x8000
 
-// ── Button byte values (first byte; second byte = inverted complement) ────────
+// Button byte values (first byte; second byte = bitwise inverse).
 static const uint8_t BUTTON_RELEASE    = 0x00;
 static const uint8_t BUTTON_LOCK       = 0x01;
 static const uint8_t BUTTON_TIMER      = 0x02;
@@ -37,12 +36,12 @@ static const uint8_t BUTTON_POWER      = 0x04;
 static const uint8_t BUTTON_SELF_CLEAN = 0x08;
 static const uint8_t BUTTON_BOOST_CMD  = 0x10;  // renamed to avoid clash with LED_BOOST
 
-// ── Pulse timing (µs) ────────────────────────────────────────────────────────
-// Frame encoding: LOW-200 start pulse, then per bit: HIGH-(800|200) + LOW-200.
-// Delta measured between consecutive falling edges = HIGH + 200 µs spacer.
-//   Bit-1: 800 + 200 = 1000 µs  →  accept window [750, 1350)
-//   Bit-0: 200 + 200 =  400 µs  →  accept window [100,  650)
-// 100 µs gap between windows ensures no overlap.
+// Pulse timing (us).
+// Frame encoding: LOW-200 start pulse, then per bit: HIGH-(800|200) + LOW-200 spacer.
+// Delta between consecutive falling edges = HIGH + 200 us spacer.
+//   Bit-1: 800 + 200 = 1000 us  ->  accept window [750, 1350)
+//   Bit-0: 200 + 200 =  400 us  ->  accept window [100,  650)
+// 100 us gap between windows prevents overlap.
 static const uint32_t BIT1_MIN = 750;
 static const uint32_t BIT1_MAX = 1350;
 static const uint32_t BIT0_MIN = 100;
@@ -51,7 +50,7 @@ static const uint32_t BIT0_MAX = 650;
 // Debounce delay after a button press before sending RELEASE (ms).
 static const uint32_t BUTTON_DEBOUNCE_MS = 50;
 
-// ── 7-segment character codes (.gfedcba bit order) ───────────────────────────
+// 7-segment character codes (.gfedcba bit order).
 static const uint8_t SEG_BLANK = 0b00000000;
 static const uint8_t SEG_0     = 0b00111111;
 static const uint8_t SEG_1     = 0b00000110;
@@ -64,17 +63,15 @@ static const uint8_t SEG_7     = 0b00000111;
 static const uint8_t SEG_8     = 0b01111111;
 static const uint8_t SEG_9     = 0b01101111;
 
-// ─────────────────────────────────────────────────────────────────────────────
-
 class QS1200Component : public Component {
  public:
-  // ── Pin setters ───────────────────────────────────────────────────────────
+  // Pin setters
   void set_from_main_pin(InternalGPIOPin *pin) { from_main_pin_ = pin; }
   void set_to_disp_pin(InternalGPIOPin *pin)   { to_disp_pin_   = pin; }
   void set_from_disp_pin(InternalGPIOPin *pin) { from_disp_pin_ = pin; }
   void set_to_main_pin(InternalGPIOPin *pin)   { to_main_pin_   = pin; }
 
-  // ── Sensor setters ────────────────────────────────────────────────────────
+  // Sensor setters
   void set_display_code_sensor(text_sensor::TextSensor *s)  { display_code_sensor_ = s; }
   void set_running_sensor(binary_sensor::BinarySensor *s)   { running_sensor_      = s; }
   void set_boost_sensor(binary_sensor::BinarySensor *s)     { boost_sensor_        = s; }
@@ -84,20 +81,20 @@ class QS1200Component : public Component {
   void set_high_salt_sensor(binary_sensor::BinarySensor *s) { high_salt_sensor_    = s; }
   void set_service_sensor(binary_sensor::BinarySensor *s)   { service_sensor_      = s; }
 
-  // ── ESPHome lifecycle ─────────────────────────────────────────────────────
+  // ESPHome lifecycle
   void setup() override;
   void loop() override;
   float get_setup_priority() const override { return setup_priority::IO; }
   void dump_config() override;
 
-  // ── Button injection (fase 2) ─────────────────────────────────────────────
+  // Button injection (fase 2)
   void press_power();
   void press_timer();
   void press_boost();
   void press_self_clean();
   void press_lock();
 
-  // ── ISR entry points (public for static template dispatch) ────────────────
+  // ISR entry points (public for static template dispatch)
   static void IRAM_ATTR isr_from_main(QS1200Component *arg);
   static void IRAM_ATTR isr_from_disp(QS1200Component *arg);
 
@@ -108,14 +105,14 @@ class QS1200Component : public Component {
   InternalGPIOPin *from_disp_pin_{nullptr};
   InternalGPIOPin *to_main_pin_{nullptr};
 
-  // ISR state — mainboard → display DIO decode
+  // ISR state for mainboard -> display DIO decode
   volatile uint32_t raw_frame_{0};
   volatile int      bit_index_{0};
   volatile uint32_t fall_time_us_{0};
   volatile uint32_t decoded_frame_{0};
   volatile bool     new_frame_{false};
 
-  // Button injection — set in loop(), checked in isr_from_disp
+  // Set in loop() during button injection; checked in isr_from_disp
   volatile bool injecting_{false};
 
   portMUX_TYPE mux_ = portMUX_INITIALIZER_UNLOCKED;
@@ -136,9 +133,8 @@ class QS1200Component : public Component {
   void send_button_(uint8_t button_code);
 };
 
-// ── Fase 2: button subklassen ─────────────────────────────────────────────────
+// Fase 2: button subclasses.
 // Compiled only when the button platform is active (USE_BUTTON defined by ESPHome).
-
 #ifdef USE_BUTTON
 class QS1200PowerButton : public button::Button {
  public:
