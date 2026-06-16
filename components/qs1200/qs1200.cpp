@@ -1,17 +1,11 @@
 #include "qs1200.h"
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
-// delayMicroseconds() / delay() / micros() available via esphome/core/hal.h
-// (already pulled in transitively through qs1200.h → esphome/core/hal.h).
 
 namespace esphome {
 namespace qs1200 {
 
 static const char *const TAG = "qs1200";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Setup
-// ─────────────────────────────────────────────────────────────────────────────
 
 void QS1200Component::setup() {
   from_main_pin_->setup();
@@ -19,7 +13,7 @@ void QS1200Component::setup() {
   to_disp_pin_->setup();
   to_main_pin_->setup();
 
-  // Both output lines idle HIGH — this is the fail-safe pass-through state.
+  // Both output lines idle HIGH: fail-safe pass-through state.
   to_disp_pin_->digital_write(true);
   to_main_pin_->digital_write(true);
 
@@ -39,10 +33,6 @@ void QS1200Component::dump_config() {
   LOG_PIN("  TO_MAIN:   ", to_main_pin_);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main loop — consume decoded frames from ISR
-// ─────────────────────────────────────────────────────────────────────────────
-
 void QS1200Component::loop() {
   if (!new_frame_)
     return;
@@ -56,19 +46,16 @@ void QS1200Component::loop() {
   process_frame_(frame);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ISR — mainboard → display (DIO, 32-bit frame decode + immediate pass-through)
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ISR: mainboard -> display (DIO, 32-bit frame decode + immediate pass-through).
 void IRAM_ATTR QS1200Component::isr_from_main(QS1200Component *arg) {
   uint32_t now = micros();
 
   if (!arg->from_main_pin_->digital_read()) {
-    // ── Falling edge ──────────────────────────────────────────────────────
-    arg->to_disp_pin_->digital_write(false);  // pass-through immediately
+    // Falling edge: pass-through first, then decode.
+    arg->to_disp_pin_->digital_write(false);
 
     uint32_t delta = now - arg->fall_time_us_;
-    arg->fall_time_us_ = micros();  // timestamp after the write
+    arg->fall_time_us_ = micros();
 
     if (delta >= BIT1_MIN && delta < BIT1_MAX) {
       arg->raw_frame_ = (arg->raw_frame_ << 1) | 1u;
@@ -77,7 +64,7 @@ void IRAM_ATTR QS1200Component::isr_from_main(QS1200Component *arg) {
       arg->raw_frame_ = (arg->raw_frame_ << 1);
       arg->bit_index_++;
     } else {
-      // Out-of-range delta → treat as frame start/sync, reset accumulator.
+      // Out-of-range: frame start/sync; reset accumulator.
       arg->bit_index_ = 0;
       arg->raw_frame_ = 0;
       return;
@@ -92,26 +79,18 @@ void IRAM_ATTR QS1200Component::isr_from_main(QS1200Component *arg) {
       arg->raw_frame_ = 0;
     }
   } else {
-    // ── Rising edge — pass-through only ───────────────────────────────────
+    // Rising edge: pass-through only.
     arg->to_disp_pin_->digital_write(true);
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ISR — display board → mainboard (CLK/button line, pure pass-through)
+// ISR: display board -> mainboard (CLK/button line, pure pass-through).
 // Suppressed while loop() is injecting a synthetic button press.
-// ─────────────────────────────────────────────────────────────────────────────
-
 void IRAM_ATTR QS1200Component::isr_from_disp(QS1200Component *arg) {
   if (arg->injecting_)
     return;
-
   arg->to_main_pin_->digital_write(!arg->from_disp_pin_->digital_read());
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Frame processing (runs in main loop task)
-// ─────────────────────────────────────────────────────────────────────────────
 
 void QS1200Component::process_frame_(uint32_t frame) {
   // Bits 31-24: left 7-seg digit  (bit 31 = decimal point)
@@ -133,13 +112,13 @@ void QS1200Component::process_frame_(uint32_t frame) {
       s->publish_state(v);
   };
 
-  pub(running_sensor_,   (frame & LED_WORKING)       != 0);
-  pub(boost_sensor_,     (frame & LED_BOOST)          != 0);
-  pub(sleep_sensor_,     (frame & LED_SLEEP)          != 0);
-  pub(low_flow_sensor_,  (frame & LED_PUMP_LOW_FLOW)  != 0);
-  pub(low_salt_sensor_,  (frame & LED_LOW_SALT)       != 0);
-  pub(high_salt_sensor_, (frame & LED_HIGH_SALT)      != 0);
-  pub(service_sensor_,   (frame & LED_SERVICE)        != 0);
+  pub(running_sensor_,   (frame & LED_WORKING)      != 0);
+  pub(boost_sensor_,     (frame & LED_BOOST)         != 0);
+  pub(sleep_sensor_,     (frame & LED_SLEEP)         != 0);
+  pub(low_flow_sensor_,  (frame & LED_PUMP_LOW_FLOW) != 0);
+  pub(low_salt_sensor_,  (frame & LED_LOW_SALT)      != 0);
+  pub(high_salt_sensor_, (frame & LED_HIGH_SALT)     != 0);
+  pub(service_sensor_,   (frame & LED_SERVICE)       != 0);
 
   ESP_LOGV(TAG, "frame=0x%08X disp='%c%c' W=%d B=%d Sl=%d LF=%d LS=%d HS=%d SVC=%d",
            frame, left_ch, right_ch,
@@ -147,10 +126,6 @@ void QS1200Component::process_frame_(uint32_t frame) {
            !!(frame & LED_PUMP_LOW_FLOW), !!(frame & LED_LOW_SALT),
            !!(frame & LED_HIGH_SALT), !!(frame & LED_SERVICE));
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 7-segment lookup
-// ─────────────────────────────────────────────────────────────────────────────
 
 char QS1200Component::seg_to_char_(uint8_t seg) {
   switch (seg & 0x7F) {
@@ -169,23 +144,20 @@ char QS1200Component::seg_to_char_(uint8_t seg) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Button injection (fase 2)
-// Transmits a 16-bit PWM frame on TO_MAIN, followed automatically by RELEASE.
-// Blocks the main loop for ~80 ms — acceptable for a one-shot button event.
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Button injection (fase 2).
+// Transmits a 16-bit PWM frame on TO_MAIN, then automatically sends RELEASE.
+// Blocks the main loop for ~80 ms per keypress.
 void QS1200Component::send_button_(uint8_t button_code) {
   injecting_ = true;
 
-  // Frame: [inverted_byte | button_byte]
+  // Frame layout: [inverted_byte | button_byte]
   uint16_t word = ((uint16_t)(button_code ^ 0xFF) << 8) | button_code;
 
-  // Start pulse: LOW 200 µs
+  // Start pulse: LOW 200 us
   to_main_pin_->digital_write(false);
   delayMicroseconds(200);
 
-  // 16 data bits, MSB first: HIGH-(800|200) µs + LOW-200 µs spacer
+  // 16 data bits, MSB first: HIGH-(800|200) us + LOW-200 us spacer
   for (int i = 15; i >= 0; i--) {
     to_main_pin_->digital_write(true);
     delayMicroseconds((word >> i) & 1u ? 800 : 200);

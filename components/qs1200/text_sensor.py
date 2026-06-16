@@ -17,7 +17,6 @@ CONFIG_SCHEMA = cv.Schema(
 
 async def to_code(config):
     hub = await cg.get_variable(config[CONF_QS1200_ID])
-
     if CONF_DISPLAY_CODE in config:
         sens = await text_sensor.new_text_sensor(config[CONF_DISPLAY_CODE])
         cg.add(hub.set_display_code_sensor(sens))
