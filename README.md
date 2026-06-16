@@ -212,6 +212,9 @@ Test eerst met fase 1 (read-only) totdat de frames stabiel binnenkomen.
 
 | Versie | Omschrijving |
 |--------|--------------|
+| v0.1.4 | Plain ASCII formatting, includes met dubbele quotes |
+| v0.1.3 | FreeRTOS includes, button.py en text_sensor.py opgeschoond |
+| v0.1.2 | Compile-fouten opgelost, gevalideerd met ESPHome 2026.5.3 |
 | v0.1.1 | README toegevoegd |
 | v0.1.0 | Initiële versie: fase 1 read-only component |
 
